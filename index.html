@@ -32,52 +32,57 @@
     </table>
 
     <script>
-      // TEMP for MVP: paste your Supabase URL and ANON KEY (read-only).
-      const SUPABASE_URL = https://htgfglajwswhgvlycpsk.supabase.co;
-      const SUPABASE_ANON_KEY = eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imh0Z2ZnbGFqd3N3aGd2bHljcHNrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTkyMTAxNjMsImV4cCI6MjA3NDc4NjE2M30.l5MI4as6ejGhc-uoWI2KLIO95dp9l3twXpDlvxEfD0I;
+  const SUPABASE_URL = https://htgfglajwswhgvlycpsk.supabase.co;
+  const SUPABASE_ANON_KEY = eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imh0Z2ZnbGFqd3N3aGd2bHljcHNrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTkyMTAxNjMsImV4cCI6MjA3NDc4NjE2M30.l5MI4as6ejGhc-uoWI2KLIO95dp9l3twXpDlvxEfD0I;
+  const client = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-      const client = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-      const tbody = document.querySelector("#tbl tbody");
-      const q = document.getElementById("q");
-      const count = document.getElementById("count");
-      let rows = [];
+  const tbody = document.querySelector("#tbl tbody");
+  const q = document.getElementById("q");
+  const count = document.getElementById("count");
+  let rows = [];
 
-      async function load() {
-        // Pull up to 1000 bonds, ordered by maturity
-        const { data, error } = await client
-          .from("bonds")
-          .select("issuer, description, coupon_rate, maturity_date, last_price, last_yield, currency")
-          .order("maturity_date", { ascending: true })
-          .limit(1000);
+  async function load() {
+    console.time("supabase-query");
+    const { data, error } = await client
+      .from("bonds")
+      .select("issuer, description, coupon_rate, maturity_date, last_price, last_yield, currency")
+      .order("maturity_date", { ascending: true })
+      .limit(1000);
+    console.timeEnd("supabase-query");
+    if (error) {
+      console.error("Supabase error:", error);
+      alert("Failed to load data. Check console for details.");
+      return;
+    }
+    console.log("Rows received:", data?.length);
+    rows = data || [];
+    render();
+  }
 
-        if (error) { console.error(error); alert("Error loading data"); return; }
-        rows = data || [];
-        render();
-      }
+  function render() {
+    const term = (q.value || "").toLowerCase();
+    const filtered = rows.filter(r =>
+      !term ||
+      (r.issuer && r.issuer.toLowerCase().includes(term)) ||
+      (r.description && r.description.toLowerCase().includes(term))
+    );
+    count.textContent = `${filtered.length} results`;
+    tbody.innerHTML = filtered.map(r => `
+      <tr>
+        <td>${r.issuer ?? ""}</td>
+        <td>${r.description ?? ""}</td>
+        <td>${r.coupon_rate != null ? Number(r.coupon_rate).toFixed(2) + "%" : ""}</td>
+        <td>${r.maturity_date ?? ""}</td>
+        <td>${r.last_price ?? ""}</td>
+        <td>${r.last_yield != null ? Number(r.last_yield).toFixed(4) : ""}</td>
+        <td>${r.currency ?? ""}</td>
+      </tr>
+    `).join("");
+  }
 
-      function render() {
-        const term = (q.value || "").toLowerCase();
-        const filtered = rows.filter(r =>
-          !term ||
-          (r.issuer && r.issuer.toLowerCase().includes(term)) ||
-          (r.description && r.description.toLowerCase().includes(term))
-        );
-        count.textContent = `${filtered.length} results`;
-        tbody.innerHTML = filtered.map(r => `
-          <tr>
-            <td>${r.issuer ?? ""}</td>
-            <td>${r.description ?? ""}</td>
-            <td>${r.coupon_rate != null ? Number(r.coupon_rate).toFixed(2) + "%" : ""}</td>
-            <td>${r.maturity_date ?? ""}</td>
-            <td>${r.last_price ?? ""}</td>
-            <td>${r.last_yield != null ? Number(r.last_yield).toFixed(4) : ""}</td>
-            <td>${r.currency ?? ""}</td>
-          </tr>
-        `).join("");
-      }
+  q.addEventListener("input", render);
+  load();
+</script>
 
-      q.addEventListener("input", render);
-      load();
-    </script>
   </body>
 </html>
