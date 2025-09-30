@@ -1,0 +1,83 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Bond Finder (MVP)</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <style>
+      body { font-family: system-ui, sans-serif; margin: 24px; max-width: 1200px; }
+      table { border-collapse: collapse; width: 100%; }
+      th, td { border: 1px solid #ddd; padding: 8px; font-size: 14px; }
+      th { background: #f7f7f7; text-align: left; }
+      input { padding: 8px; width: 320px; margin: 12px 0; }
+      .row { display: flex; gap: 12px; align-items: center; }
+      .pill { padding: 2px 8px; border-radius: 999px; background:#eef; font-size:12px; }
+    </style>
+    <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+  </head>
+  <body>
+    <h1>Bond Finder (MVP)</h1>
+    <div class="row">
+      <input id="q" placeholder="Search issuer or description…" />
+      <span id="count" class="pill"></span>
+    </div>
+    <table id="tbl">
+      <thead>
+        <tr>
+          <th>Issuer</th><th>Description</th><th>Coupon</th><th>Maturity</th>
+          <th>Price</th><th>Yield</th><th>Currency</th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+
+    <script>
+      // TEMP for MVP: paste your Supabase URL and ANON KEY (read-only).
+      const SUPABASE_URL = "PASTE_YOUR_SUPABASE_URL";
+      const SUPABASE_ANON_KEY = "PASTE_YOUR_SUPABASE_ANON_KEY";
+
+      const client = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+      const tbody = document.querySelector("#tbl tbody");
+      const q = document.getElementById("q");
+      const count = document.getElementById("count");
+      let rows = [];
+
+      async function load() {
+        // Pull up to 1000 bonds, ordered by maturity
+        const { data, error } = await client
+          .from("bonds")
+          .select("issuer, description, coupon_rate, maturity_date, last_price, last_yield, currency")
+          .order("maturity_date", { ascending: true })
+          .limit(1000);
+
+        if (error) { console.error(error); alert("Error loading data"); return; }
+        rows = data || [];
+        render();
+      }
+
+      function render() {
+        const term = (q.value || "").toLowerCase();
+        const filtered = rows.filter(r =>
+          !term ||
+          (r.issuer && r.issuer.toLowerCase().includes(term)) ||
+          (r.description && r.description.toLowerCase().includes(term))
+        );
+        count.textContent = `${filtered.length} results`;
+        tbody.innerHTML = filtered.map(r => `
+          <tr>
+            <td>${r.issuer ?? ""}</td>
+            <td>${r.description ?? ""}</td>
+            <td>${r.coupon_rate != null ? Number(r.coupon_rate).toFixed(2) + "%" : ""}</td>
+            <td>${r.maturity_date ?? ""}</td>
+            <td>${r.last_price ?? ""}</td>
+            <td>${r.last_yield != null ? Number(r.last_yield).toFixed(4) : ""}</td>
+            <td>${r.currency ?? ""}</td>
+          </tr>
+        `).join("");
+      }
+
+      q.addEventListener("input", render);
+      load();
+    </script>
+  </body>
+</html>
