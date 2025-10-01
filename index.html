@@ -1,88 +1,102 @@
 <!doctype html>
 <html>
-  <head>
-    <meta charset="utf-8" />
-    <title>Bond Finder (MVP)</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <style>
-      body { font-family: system-ui, sans-serif; margin: 24px; max-width: 1200px; }
-      table { border-collapse: collapse; width: 100%; }
-      th, td { border: 1px solid #ddd; padding: 8px; font-size: 14px; }
-      th { background: #f7f7f7; text-align: left; }
-      input { padding: 8px; width: 320px; margin: 12px 0; }
-      .row { display: flex; gap: 12px; align-items: center; }
-      .pill { padding: 2px 8px; border-radius: 999px; background:#eef; font-size:12px; }
-    </style>
-    <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
-  </head>
-  <body>
-    <h1>Bond Finder (MVP)</h1>
-    <div class="row">
-      <input id="q" placeholder="Search issuer or description…" />
-      <span id="count" class="pill"></span>
-    </div>
-    <table id="tbl">
-      <thead>
-        <tr>
-          <th>Issuer</th><th>Description</th><th>Coupon</th><th>Maturity</th>
-          <th>Price</th><th>Yield</th><th>Currency</th>
-        </tr>
-      </thead>
-      <tbody></tbody>
-    </table>
+<head>
+  <meta charset="utf-8" />
+  <title>Bond Finder</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+  <style>
+    :root { --bg:#0b1320; --card:#121a2b; --ink:#eaf0ff; --muted:#9fb2d7; --pill:#1e2a46; }
+    body{margin:0;background:var(--bg);color:var(--ink);font-family:system-ui,Segoe UI,Roboto,Helvetica,Arial,sans-serif}
+    header{padding:20px 24px;display:flex;gap:16px;align-items:center;flex-wrap:wrap}
+    input{flex:1;min-width:260px;background:#0f1726;border:1px solid #203055;color:var(--ink);padding:10px 12px;border-radius:10px}
+    .grid{display:grid;gap:14px;padding:14px;
+          grid-template-columns:repeat(auto-fill,minmax(260px,1fr))}
+    .card{background:var(--card);border:1px solid #1e2a46;border-radius:14px;
+          padding:14px;cursor:pointer;transition:transform .12s ease, border .12s ease}
+    .card:hover{transform:translateY(-2px);border-color:#3356ff}
+    .issuer{font-weight:600;margin-bottom:6px;line-height:1.2}
+    .desc{color:var(--muted);font-size:13px;margin-bottom:10px;min-height:34px}
+    .row{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px}
+    .pill{background:var(--pill);border:1px solid #1f2c4a;color:#c9d8ff;
+          font-size:12px;padding:2px 8px;border-radius:999px}
+    .meta{display:flex;justify-content:space-between;font-size:12px;color:#b9c6e8}
+    .foot{display:flex;justify-content:space-between;align-items:center;margin-top:8px}
+    .link{color:#aabaff;font-size:12px;text-decoration:none}
+    .count{color:#9fb2d7;font-size:13px}
+  </style>
+</head>
+<body>
+  <header>
+    <input id="q" placeholder="Search issuer, description, ISIN…" />
+    <span class="count" id="count">Loading…</span>
+  </header>
 
-    <script>
-  const SUPABASE_URL = "https://htgfglajwswhgvlycpsk.supabase.co";
-  const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imh0Z2ZnbGFqd3N3aGd2bHljcHNrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTkyMTAxNjMsImV4cCI6MjA3NDc4NjE2M30.l5MI4as6ejGhc-uoWI2KLIO95dp9l3twXpDlvxEfD0I";
-  const client = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+  <main class="grid" id="grid"></main>
 
-  const tbody = document.querySelector("#tbl tbody");
-  const q = document.getElementById("q");
-  const count = document.getElementById("count");
-  let rows = [];
+  <script>
+    // 🔑 PASTE YOURS
+    const SUPABASE_URL = "YOUR_SUPABASE_URL";
+    const SUPABASE_ANON_KEY = "YOUR_SUPABASE_ANON_KEY";
+    const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-  async function load() {
-    console.time("supabase-query");
-    const { data, error } = await client
-      .from("bonds")
-      .select("issuer, description, coupon_rate, maturity_date, last_price, last_yield, currency")
-      .order("maturity_date", { ascending: true })
-      .limit(1000);
-    console.timeEnd("supabase-query");
-    if (error) {
-      console.error("Supabase error:", error);
-      alert("Failed to load data. Check console for details.");
-      return;
+    const q = document.getElementById('q');
+    const grid = document.getElementById('grid');
+    const count = document.getElementById('count');
+    let rows = [];
+
+    const fmtPct = (x, d=2) => (x==null? "" : Number(x).toFixed(d) + "%");
+    const fmtDate = s => s ? new Date(s).toISOString().slice(0,10) : "";
+
+    async function load() {
+      // Pull a page — tweak limit as needed. Add pagination later.
+      const { data, error } = await sb
+        .from('bonds')
+        .select('isin, symbol, issuer, description, coupon_rate, maturity_date, last_yield, currency')
+        .order('maturity_date', { ascending: true })
+        .limit(500);
+      if (error) { console.error(error); count.textContent = 'Error loading'; return; }
+      rows = data || [];
+      render();
     }
-    console.log("Rows received:", data?.length);
-    rows = data || [];
-    render();
-  }
 
-  function render() {
-    const term = (q.value || "").toLowerCase();
-    const filtered = rows.filter(r =>
-      !term ||
-      (r.issuer && r.issuer.toLowerCase().includes(term)) ||
-      (r.description && r.description.toLowerCase().includes(term))
-    );
-    count.textContent = `${filtered.length} results`;
-    tbody.innerHTML = filtered.map(r => `
-      <tr>
-        <td>${r.issuer ?? ""}</td>
-        <td>${r.description ?? ""}</td>
-        <td>${r.coupon_rate != null ? Number(r.coupon_rate).toFixed(2) + "%" : ""}</td>
-        <td>${r.maturity_date ?? ""}</td>
-        <td>${r.last_price ?? ""}</td>
-        <td>${r.last_yield != null ? Number(r.last_yield).toFixed(4) : ""}</td>
-        <td>${r.currency ?? ""}</td>
-      </tr>
-    `).join("");
-  }
+    function render() {
+      const term = (q.value || "").toLowerCase();
+      const filtered = rows.filter(r => {
+        const hay = `${r.issuer||''} ${r.description||''} ${r.isin||''}`.toLowerCase();
+        return !term || hay.includes(term);
+      });
 
-  q.addEventListener("input", render);
-  load();
-</script>
+      count.textContent = `${filtered.length} results`;
+      grid.innerHTML = filtered.map(r => {
+        const url = new URL('detail.html', window.location.href);
+        // Prefer ISIN, else fall back to (symbol + maturity + coupon)
+        if (r.isin) url.searchParams.set('isin', r.isin);
+        else {
+          if (r.symbol) url.searchParams.set('symbol', r.symbol);
+          if (r.maturity_date) url.searchParams.set('mat', r.maturity_date);
+          if (r.coupon_rate!=null) url.searchParams.set('cpn', r.coupon_rate);
+        }
+        return `
+          <article class="card" onclick="location.href='${url.href}'">
+            <div class="issuer">${r.issuer ?? ''}</div>
+            <div class="desc">${r.description ?? ''}</div>
+            <div class="row">
+              <span class="pill">Coupon ${fmtPct(r.coupon_rate,2)}</span>
+              <span class="pill">Mat ${fmtDate(r.maturity_date)}</span>
+              <span class="pill">${r.currency || ''}</span>
+            </div>
+            <div class="foot">
+              <div class="meta"><span>YTM</span>&nbsp;<b>${fmtPct(r.last_yield,3)}</b></div>
+              <a class="link" href="${url.href}" onclick="event.stopPropagation()">View details →</a>
+            </div>
+          </article>
+        `;
+      }).join('');
+    }
 
-  </body>
+    q.addEventListener('input', render);
+    load();
+  </script>
+</body>
 </html>
