@@ -1,0 +1,105 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Bond Detail</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+  <style>
+    :root { --bg:#0b1320; --card:#121a2b; --ink:#eaf0ff; --muted:#9fb2d7; --pill:#1e2a46; }
+    body{margin:0;background:var(--bg);color:var(--ink);font-family:system-ui,Segoe UI,Roboto,Helvetica,Arial,sans-serif}
+    main{max-width:900px;margin:24px auto;padding:0 16px}
+    a{color:#aabaff;text-decoration:none}
+    .card{background:var(--card);border:1px solid #1e2a46;border-radius:14px;padding:16px}
+    h1{margin:6px 0 10px}
+    .grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+    .field{background:#0f1726;border:1px solid #1e2a46;border-radius:10px;padding:10px}
+    .label{display:block;color:#b9c6e8;font-size:12px;margin-bottom:4px}
+    .value{font-weight:600}
+    .row{display:flex;gap:8px;flex-wrap:wrap;margin:8px 0}
+    .pill{background:var(--pill);border:1px solid #1f2c4a;color:#c9d8ff;font-size:12px;padding:2px 8px;border-radius:999px}
+    .actions{display:flex;gap:10px;margin-top:12px;flex-wrap:wrap}
+    .btn{background:#3356ff;color:white;border:none;border-radius:10px;padding:10px 12px;cursor:pointer}
+  </style>
+</head>
+<body>
+  <main>
+    <a href="index.html">← Back</a>
+    <div class="card" id="wrap">
+      <div id="header"></div>
+      <div class="grid" id="grid"></div>
+      <div class="actions" id="actions"></div>
+    </div>
+  </main>
+
+  <script>
+    // 🔑 PASTE YOURS
+    const SUPABASE_URL = "YOUR_SUPABASE_URL";
+    const SUPABASE_ANON_KEY = "YOUR_SUPABASE_ANON_KEY";
+    const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+    const p = new URLSearchParams(location.search);
+    const isin = p.get('isin');
+    const symbol = p.get('symbol');
+    const mat = p.get('mat');
+    const cpn = p.get('cpn');
+
+    const fmtPct = (x, d=2) => (x==null? "" : Number(x).toFixed(d) + "%");
+    const fmtDate = s => s ? new Date(s).toISOString().slice(0,10) : "";
+
+    async function load() {
+      let query = sb.from('bonds').select('*').limit(1);
+      if (isin) query = query.eq('isin', isin);
+      else if (symbol && mat && cpn) {
+        query = query.eq('symbol', symbol).eq('maturity_date', mat).eq('coupon_rate', cpn);
+      } else if (symbol) {
+        query = query.eq('symbol', symbol);
+      }
+      const { data, error } = await query;
+      if (error || !data || !data.length) {
+        document.getElementById('wrap').innerHTML = "<p>Bond not found.</p>";
+        return;
+      }
+      const b = data[0];
+
+      document.getElementById('header').innerHTML = `
+        <div class="row">
+          <span class="pill">${b.currency || ''}</span>
+          ${b.type ? `<span class="pill">${b.type}</span>` : ''}
+          ${b.rating ? `<span class="pill">${b.rating}</span>` : ''}
+        </div>
+        <h1>${b.issuer || ''}</h1>
+        <div style="color:#9fb2d7">${b.description || ''}</div>
+      `;
+
+      const fields = [
+        ['ISIN', b.isin], ['FIGI', b.figi],
+        ['Coupon', fmtPct(b.coupon_rate,2)], ['Maturity', fmtDate(b.maturity_date)],
+        ['Issue Date', fmtDate(b.issue_date)], ['Currency', b.currency || ''],
+        ['Last Price', b.last_price], ['Last Yield', b.last_yield!=null? Number(b.last_yield).toFixed(4) : ''],
+        ['High', b.hi_price], ['Low', b.lo_price],
+      ];
+
+      document.getElementById('grid').innerHTML = fields.map(([label,val]) => `
+        <div class="field">
+          <span class="label">${label}</span>
+          <span class="value">${val ?? ''}</span>
+        </div>
+      `).join('');
+
+      // (Optional) broker deeplink placeholder — fill templates later
+      const actions = document.getElementById('actions');
+      if (b.isin) {
+        actions.innerHTML = `
+          <button class="btn" onclick="alert('Broker integration coming soon')">Buy at Broker</button>
+          <a class="btn" style="background:#1e2a46;border:1px solid #2a3a66"
+             href="https://www.google.com/search?q=${encodeURIComponent(b.isin + ' prospectus')}" target="_blank">
+             View documents
+          </a>
+        `;
+      }
+    }
+    load();
+  </script>
+</body>
+</html>
